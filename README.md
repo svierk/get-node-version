@@ -1,4 +1,4 @@
-# 🕵🏻 Get Node Version V1
+# 🕵🏻 Get Node Version
 
 This repository implements a very simple GitHub composite action that pulls the Node.js version from the _package.json_ file of the project and ensures that it is used for the current pipeline execution. The action relies on the Node.js version specified within the [engines](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#engines) section of the _package.json_, e.g:
 
@@ -38,7 +38,7 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Select Node Version
-        uses: svierk/get-node-version@v1
+        uses: svierk/get-node-version@v1.0.1
 ```
 
 ## References
