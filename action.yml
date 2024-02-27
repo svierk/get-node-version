@@ -1,0 +1,15 @@
+name: 'Get Node Version'
+description: 'Pulls the Node.js version to be used from the package.json file of the project.'
+
+runs:
+  using: composite
+  steps:
+    - name: Get Node.js Version
+      shell: bash
+      run: |
+        echo "$(cat ./package.json)" | jq .engines.node | xargs -I {} echo "NodeVersion="{} >> $GITHUB_ENV
+    - name: Use Node.js ${{ env.NodeVersion }}
+      uses: actions/setup-node@main
+      with:
+        node-version: ${{ env.NodeVersion }}
+        cache: 'npm'
