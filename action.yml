@@ -1,6 +1,10 @@
 name: 'Get Node Version'
 description: 'Pulls the Node.js version to be used from the package.json file of the project.'
 
+branding:
+  icon: 'search'
+  color: 'green'
+
 runs:
   using: composite
   steps:
