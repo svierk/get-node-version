@@ -9,7 +9,7 @@ inputs:
   path: 
     description: 'Specify the path where the package.json file can be found.'
     required: false
-    default: './package.json'
+    default: './'
 
 runs:
   using: composite
@@ -17,9 +17,10 @@ runs:
     - name: Get Node.js Version
       shell: bash
       run: |
-        echo "$(cat ${{ inputs.path }})" | jq .engines.node | xargs -I {} echo "NodeVersion="{} >> $GITHUB_ENV
+        echo "$(cat ${{ inputs.path }}package.json)" | jq .engines.node | xargs -I {} echo "NodeVersion="{} >> $GITHUB_ENV
     - name: Use Node.js ${{ env.NodeVersion }}
       uses: actions/setup-node@main
       with:
         node-version: ${{ env.NodeVersion }}
         cache: 'npm'
+        cache-dependency-path: '${{ inputs.path }}package-lock.json'
