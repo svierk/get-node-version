@@ -10,6 +10,10 @@ inputs:
     description: 'Specify the path where the package.json file can be found.'
     required: false
     default: './'
+  package-manager:
+    description: 'Specify the package manager to be used. Supported values: npm, yarn'
+    required: false
+    default: 'npm'
 
 runs:
   using: composite
@@ -22,5 +26,5 @@ runs:
       uses: actions/setup-node@main
       with:
         node-version: ${{ env.NodeVersion }}
-        cache: 'npm'
-        cache-dependency-path: '${{ inputs.path }}package-lock.json'
+        cache: ${{ inputs.package-manager }}
+        cache-dependency-path: ${{ inputs.package-manager == 'npm' && format('{0}package-lock.json', inputs.path) || format('{0}yarn.lock', inputs.path) }}
