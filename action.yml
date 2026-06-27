@@ -6,25 +6,65 @@ branding:
   color: 'green'
 
 inputs:
-  path: 
+  path:
     description: 'Specify the path where the package.json file can be found.'
     required: false
     default: './'
   package-manager:
-    description: 'Specify the package manager to be used. Supported values: npm, yarn'
+    description: 'Specify the package manager to be used. Supported values: npm, yarn, pnpm'
     required: false
     default: 'npm'
+
+outputs:
+  node-version:
+    description: 'The Node.js version resolved from the package.json engines field.'
+    value: ${{ steps.resolve.outputs.node-version }}
 
 runs:
   using: composite
   steps:
     - name: Get Node.js Version
+      id: resolve
       shell: bash
+      env:
+        INPUT_PATH: ${{ inputs.path }}
+        PACKAGE_MANAGER: ${{ inputs.package-manager }}
       run: |
-        echo "$(cat ${{ inputs.path }}package.json)" | jq .engines.node | xargs -I {} echo "NodeVersion="{} >> $GITHUB_ENV
-    - name: Use Node.js ${{ env.NodeVersion }}
-      uses: actions/setup-node@main
+        set -euo pipefail
+
+        # Normalise the path so it always ends with a single trailing slash.
+        path="${INPUT_PATH%/}/"
+        package_json="${path}package.json"
+
+        if [[ ! -f "$package_json" ]]; then
+          echo "::error::No package.json found at '$package_json'."
+          exit 1
+        fi
+
+        node_version=$(jq -r '.engines.node // empty' "$package_json")
+        if [[ -z "$node_version" ]]; then
+          echo "::error::No 'engines.node' field found in '$package_json'."
+          exit 1
+        fi
+
+        case "$PACKAGE_MANAGER" in
+          npm)  lock_file="${path}package-lock.json" ;;
+          yarn) lock_file="${path}yarn.lock" ;;
+          pnpm) lock_file="${path}pnpm-lock.yaml" ;;
+          *)
+            echo "::error::Unsupported package manager '$PACKAGE_MANAGER'. Supported values: npm, yarn, pnpm."
+            exit 1
+            ;;
+        esac
+
+        echo "Resolved Node.js version: $node_version"
+        {
+          echo "node-version=$node_version"
+          echo "lock-file=$lock_file"
+        } >> "$GITHUB_OUTPUT"
+    - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
+      uses: actions/setup-node@v4
       with:
-        node-version: ${{ env.NodeVersion }}
+        node-version: ${{ steps.resolve.outputs.node-version }}
         cache: ${{ inputs.package-manager }}
-        cache-dependency-path: ${{ inputs.package-manager == 'npm' && format('{0}package-lock.json', inputs.path) || format('{0}yarn.lock', inputs.path) }}
+        cache-dependency-path: ${{ steps.resolve.outputs.lock-file }}

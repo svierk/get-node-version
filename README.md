@@ -41,6 +41,23 @@ jobs:
         uses: svierk/get-node-version@v1.0.1
 ```
 
+### Inputs
+
+| Name              | Required | Default | Description                                                                |
+| ----------------- | -------- | ------- | -------------------------------------------------------------------------- |
+| `path`            | no       | `./`    | Path where the _package.json_ file can be found.                           |
+| `package-manager` | no       | `npm`   | Package manager used for dependency caching. Supported: `npm`, `yarn`, `pnpm`. |
+
+When using `pnpm`, make sure `pnpm` is available before this action runs (e.g. via [`pnpm/action-setup`](https://github.com/pnpm/action-setup)), as it is required for the dependency cache.
+
+### Outputs
+
+| Name           | Description                                                       |
+| -------------- | ----------------------------------------------------------------- |
+| `node-version` | The Node.js version resolved from the `engines.node` field.       |
+
+The action fails with a clear error if the _package.json_ or its `engines.node` field is missing, so a misconfiguration surfaces immediately instead of silently falling back to an undefined version.
+
 ## References
 
 The idea for the creation of this action and some further details are described in the following Medium post: [How to enforce a specific node version within a project and the associated CI/CD automations](https://medium.com/gitconnected/how-to-enforce-a-specific-node-version-within-a-project-and-the-associated-ci-cd-automations-aca9697fb9e)
