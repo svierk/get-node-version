@@ -47,6 +47,7 @@ jobs:
 | ----------------- | -------- | ------- | -------------------------------------------------------------------------- |
 | `path`            | no       | `./`    | Path where the _package.json_ file can be found.                           |
 | `package-manager` | no       | `npm`   | Package manager used for dependency caching. Supported: `npm`, `yarn`, `pnpm`. |
+| `step-summary`    | no       | `true`  | Write a result section to the GitHub Actions [job summary](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary). Set to `false` to avoid collisions with a custom workflow summary. |
 
 When using `pnpm`, make sure `pnpm` is available before this action runs (e.g. via [`pnpm/action-setup`](https://github.com/pnpm/action-setup)), as it is required for the dependency cache.
 
