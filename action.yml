@@ -14,6 +14,10 @@ inputs:
     description: 'Specify the package manager to be used. Supported values: npm, yarn, pnpm'
     required: false
     default: 'npm'
+  step-summary:
+    description: 'Write a result section to the GitHub Actions job summary. Set to false to avoid collisions with a custom workflow summary.'
+    required: false
+    default: 'true'
 
 outputs:
   node-version:
@@ -29,6 +33,7 @@ runs:
       env:
         INPUT_PATH: ${{ inputs.path }}
         PACKAGE_MANAGER: ${{ inputs.package-manager }}
+        STEP_SUMMARY: ${{ inputs.step-summary }}
       run: |
         set -euo pipefail
 
@@ -62,6 +67,16 @@ runs:
           echo "node-version=$node_version"
           echo "lock-file=$lock_file"
         } >> "$GITHUB_OUTPUT"
+
+        if [[ "$STEP_SUMMARY" == "true" ]]; then
+          {
+            echo ""
+            echo "### 🕵🏻 Node.js version"
+            echo ""
+            echo "- **Version:** \`$node_version\`"
+            echo ""
+          } >> "$GITHUB_STEP_SUMMARY"
+        fi
     - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
       uses: actions/setup-node@v4
       with:
