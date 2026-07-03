@@ -33,7 +33,6 @@ runs:
       env:
         INPUT_PATH: ${{ inputs.path }}
         PACKAGE_MANAGER: ${{ inputs.package-manager }}
-        STEP_SUMMARY: ${{ inputs.step-summary }}
       run: |
         set -euo pipefail
 
@@ -62,24 +61,34 @@ runs:
             ;;
         esac
 
-        echo "Resolved Node.js version: $node_version"
+        echo "Resolved Node.js version spec: $node_version"
         {
           echo "node-version=$node_version"
           echo "lock-file=$lock_file"
         } >> "$GITHUB_OUTPUT"
-
-        if [[ "$STEP_SUMMARY" == "true" ]]; then
-          {
-            echo ""
-            echo "### 🕵🏻 Node.js version"
-            echo ""
-            echo "- **Version:** \`$node_version\`"
-            echo ""
-          } >> "$GITHUB_STEP_SUMMARY"
-        fi
     - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
+      id: setup
       uses: actions/setup-node@v4
       with:
         node-version: ${{ steps.resolve.outputs.node-version }}
+        check-latest: true
         cache: ${{ inputs.package-manager }}
         cache-dependency-path: ${{ steps.resolve.outputs.lock-file }}
+    - name: Write job summary
+      if: ${{ inputs.step-summary == 'true' }}
+      shell: bash
+      env:
+        VERSION_SPEC: ${{ steps.resolve.outputs.node-version }}
+        INSTALLED_VERSION: ${{ steps.setup.outputs.node-version }}
+      run: |
+        set -euo pipefail
+
+        echo "Installed Node.js version: $INSTALLED_VERSION (spec: $VERSION_SPEC)"
+        {
+          echo ""
+          echo "### 🕵🏻 Node.js version"
+          echo ""
+          echo "- **Installed:** \`$INSTALLED_VERSION\`"
+          echo "- **Spec:** \`$VERSION_SPEC\`"
+          echo ""
+        } >> "$GITHUB_STEP_SUMMARY"
