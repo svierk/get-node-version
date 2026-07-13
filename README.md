@@ -2,7 +2,7 @@
 
 This repository implements a very simple GitHub composite action that pulls the Node.js version from the _package.json_ file of the project and ensures that it is used for the current pipeline execution. The action relies on the Node.js version specified within the [engines](https://docs.npmjs.com/cli/v10/configuring-npm/package-json#engines) section of the _package.json_, e.g:
 
-```
+```json
 {
   "engines": {
     "node": "24.x.x",
@@ -20,7 +20,7 @@ What you will often notice in Node.js projects is that you quickly get to the po
 
 In a GitHub workflow, the use of the action after the initial checkout step would look like this:
 
-```
+```yaml
 name: build
 
 on:
