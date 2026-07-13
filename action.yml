@@ -1,11 +1,15 @@
 name: 'Get Node Version'
-description: 'Pulls the Node.js version to be used from the package.json file of a project.'
+description: 'Pulls the Node.js version to be used from the package.json file of a project, with an optional input to override it.'
 
 branding:
   icon: 'search'
   color: 'green'
 
 inputs:
+  node-version:
+    description: 'Explicit Node.js version spec that takes precedence over the package.json lookup. An empty value (e.g. an unset repository variable) falls back to package.json.'
+    required: false
+    default: ''
   path:
     description: 'Specify the path where the package.json file can be found.'
     required: false
@@ -21,8 +25,11 @@ inputs:
 
 outputs:
   node-version:
-    description: 'The Node.js version resolved from the package.json engines field.'
+    description: 'The Node.js version spec resolved from the node-version input or the package.json engines field.'
     value: ${{ steps.resolve.outputs.node-version }}
+  source:
+    description: 'Where the version spec was resolved from: "node-version input" or "package.json".'
+    value: ${{ steps.resolve.outputs.source }}
 
 runs:
   using: composite
@@ -31,6 +38,7 @@ runs:
       id: resolve
       shell: bash
       env:
+        INPUT_NODE_VERSION: ${{ inputs.node-version }}
         INPUT_PATH: ${{ inputs.path }}
         PACKAGE_MANAGER: ${{ inputs.package-manager }}
       run: |
@@ -40,15 +48,21 @@ runs:
         path="${INPUT_PATH%/}/"
         package_json="${path}package.json"
 
-        if [[ ! -f "$package_json" ]]; then
-          echo "::error::No package.json found at '$package_json'."
-          exit 1
-        fi
+        if [[ -n "$INPUT_NODE_VERSION" ]]; then
+          node_version="$INPUT_NODE_VERSION"
+          source="node-version input"
+        else
+          if [[ ! -f "$package_json" ]]; then
+            echo "::error::No package.json found at '$package_json' and no 'node-version' input provided."
+            exit 1
+          fi
 
-        node_version=$(jq -r '.engines.node // empty' "$package_json")
-        if [[ -z "$node_version" ]]; then
-          echo "::error::No 'engines.node' field found in '$package_json'."
-          exit 1
+          node_version=$(jq -r '.engines.node // empty' "$package_json")
+          if [[ -z "$node_version" ]]; then
+            echo "::error::No 'engines.node' field found in '$package_json' and no 'node-version' input provided."
+            exit 1
+          fi
+          source="package.json"
         fi
 
         case "$PACKAGE_MANAGER" in
@@ -61,10 +75,11 @@ runs:
             ;;
         esac
 
-        echo "Resolved Node.js version spec: $node_version"
+        echo "Resolved Node.js version spec: $node_version (source: $source)"
         {
           echo "node-version=$node_version"
           echo "lock-file=$lock_file"
+          echo "source=$source"
         } >> "$GITHUB_OUTPUT"
     - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
       id: setup
@@ -79,16 +94,18 @@ runs:
       shell: bash
       env:
         VERSION_SPEC: ${{ steps.resolve.outputs.node-version }}
+        VERSION_SOURCE: ${{ steps.resolve.outputs.source }}
         INSTALLED_VERSION: ${{ steps.setup.outputs.node-version }}
       run: |
         set -euo pipefail
 
-        echo "Installed Node.js version: $INSTALLED_VERSION (spec: $VERSION_SPEC)"
+        echo "Installed Node.js version: $INSTALLED_VERSION (spec: $VERSION_SPEC, source: $VERSION_SOURCE)"
         {
           echo ""
           echo "### 🕵🏻 Node.js version"
           echo ""
           echo "- **Installed:** \`$INSTALLED_VERSION\`"
           echo "- **Spec:** \`$VERSION_SPEC\`"
+          echo "- **Source:** \`$VERSION_SOURCE\`"
           echo ""
         } >> "$GITHUB_STEP_SUMMARY"

@@ -5,7 +5,7 @@ This repository implements a very simple GitHub composite action that pulls the 
 ```
 {
   "engines": {
-    "node": "20.x.x",
+    "node": "24.x.x",
   },
 }
 ```
@@ -35,16 +35,17 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Select Node Version
-        uses: svierk/get-node-version@v1.0.1
+        uses: svierk/get-node-version@v1.5.0
 ```
 
 ### Inputs
 
 | Name              | Required | Default | Description                                                                |
 | ----------------- | -------- | ------- | -------------------------------------------------------------------------- |
+| `node-version`    | no       | –       | Explicit Node.js version spec (e.g. `24.x`) that takes precedence over the _package.json_ lookup. An empty value falls back to `engines.node`. |
 | `path`            | no       | `./`    | Path where the _package.json_ file can be found.                           |
 | `package-manager` | no       | `npm`   | Package manager used for dependency caching. Supported: `npm`, `yarn`, `pnpm`. |
 | `step-summary`    | no       | `true`  | Write a result section to the GitHub Actions [job summary](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary). Set to `false` to avoid collisions with a custom workflow summary. |
@@ -53,11 +54,27 @@ When using `pnpm`, make sure `pnpm` is available before this action runs (e.g. v
 
 ### Outputs
 
-| Name           | Description                                                       |
-| -------------- | ----------------------------------------------------------------- |
-| `node-version` | The Node.js version resolved from the `engines.node` field.       |
+| Name           | Description                                                                          |
+| -------------- | ------------------------------------------------------------------------------------ |
+| `node-version` | The Node.js version spec resolved from the `node-version` input or the `engines.node` field. |
+| `source`       | Where the version spec was resolved from: `node-version input` or `package.json`.    |
 
-The action fails with a clear error if the _package.json_ or its `engines.node` field is missing, so a misconfiguration surfaces immediately instead of silently falling back to an undefined version.
+The action fails with a clear error if no `node-version` input is provided and the _package.json_ or its `engines.node` field is missing, so a misconfiguration surfaces immediately instead of silently falling back to an undefined version.
+
+### Overriding the version via repository variable
+
+The _package.json_ remains the recommended single source of truth, since it is the only place local developer tooling picks the version up from as well. However, sometimes you temporarily need to pin the pipeline to a fixed, known-good Node.js version - ideally without touching the workflow file at all. For this, wire the `node-version` input to a [repository variable](https://docs.github.com/en/actions/learn-github-actions/variables) (organization and environment variables work the same way):
+
+```yaml
+- name: Select Node Version
+  uses: svierk/get-node-version@v1.5.0
+  with:
+    node-version: ${{ vars.NODE_VERSION_OVERRIDE }}
+```
+
+This wiring is safe to keep in place permanently: as long as the variable is unset or blank, the expression evaluates to an empty string and the action falls back to the `engines.node` field as usual. Only when the variable is populated does it take precedence - so a temporary override becomes a pure configuration change, and removing the variable's value restores the default behaviour. The job summary and the `source` output always show which of the two sources was used.
+
+Note that when an explicit version is provided this way, a _package.json_ is no longer required for the version lookup itself - but the lock file matching the selected `package-manager` still needs to exist for dependency caching.
 
 ## References
 
