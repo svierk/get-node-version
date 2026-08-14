@@ -1,0 +1,49 @@
+# Dependabot keeps this repository's only dependency current on its own:
+#
+#   * github-actions - the actions this composite action itself builds on
+#                      (currently actions/setup-node in action.yml). Every
+#                      `uses:` reference is pinned to an exact release tag, so
+#                      an update is always an explicit, reviewable change of
+#                      that pin.
+#
+# For the github-actions ecosystem "/" covers both the .github/workflows
+# directory and the action.yml / action.yaml file in the repository root - the
+# latter is what matters here, since this repository is a composite action and
+# has no workflows of its own.
+#
+# Not covered: the copy-paste snippets in README.md. Those pins (actions/checkout
+# and this action's own version tag) are maintained by hand whenever a release
+# is cut.
+#
+# There is no auto-merge workflow on purpose: this repository has no CI, so a
+# Dependabot pull request has no quality gate other than a human. A bumped
+# runtime dependency of a published action is reviewed and released manually.
+#
+# Options reference:
+# https://docs.github.com/en/code-security/dependabot/working-with-dependabot/dependabot-options-reference
+
+version: 2
+updates:
+  # Actions used inside the composite action in action.yml. Checked weekly so
+  # that a fix in one of them reaches the consumers of this action within days
+  # instead of weeks.
+  - package-ecosystem: 'github-actions'
+    directory: '/' # for this ecosystem "/" covers .github/workflows and the root action.yml
+    schedule:
+      interval: 'weekly'
+      day: 'monday'
+      time: '05:00'
+      timezone: 'Europe/Berlin'
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: 'chore(deps)'
+    cooldown:
+      # Let a release settle before adopting it - a compromised or broken
+      # version is usually pulled within a few days. Security updates are not
+      # affected by this.
+      default-days: 3
+    groups:
+      actions:
+        applies-to: version-updates
+        patterns:
+          - '*'

@@ -83,7 +83,7 @@ runs:
         } >> "$GITHUB_OUTPUT"
     - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
       id: setup
-      uses: actions/setup-node@v6
+      uses: actions/setup-node@v7.0.0
       with:
         node-version: ${{ steps.resolve.outputs.node-version }}
         check-latest: true

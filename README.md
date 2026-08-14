@@ -29,17 +29,25 @@ on:
   pull_request:
     branches: [main]
 
+# Least-privilege token: this workflow only reads the repository.
+permissions:
+  contents: read
+
 jobs:
   build:
     name: Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@v7.0.1
+        with:
+          persist-credentials: false # the GITHUB_TOKEN is not needed after the checkout - don't leave it in .git/config
 
       - name: Select Node Version
-        uses: svierk/get-node-version@v1.5.0
+        uses: svierk/get-node-version@v1.5.1
 ```
+
+Every `uses:` reference above is pinned to an exact release tag rather than a floating major tag, so adopting a new version is always an explicit, reviewable change of that pin.
 
 ### Inputs
 
@@ -67,7 +75,7 @@ The _package.json_ remains the recommended single source of truth, since it is t
 
 ```yaml
 - name: Select Node Version
-  uses: svierk/get-node-version@v1.5.0
+  uses: svierk/get-node-version@v1.5.1
   with:
     node-version: ${{ vars.NODE_VERSION_OVERRIDE }}
 ```
