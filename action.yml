@@ -15,9 +15,9 @@ inputs:
     required: false
     default: './'
   package-manager:
-    description: 'Specify the package manager to be used. Supported values: npm, yarn, pnpm'
+    description: 'Specify the package manager to be used for dependency caching. Supported values: auto, npm, yarn, pnpm. With auto, the package manager is detected from the packageManager field in package.json or the lock file, and the cache is skipped if neither is found.'
     required: false
-    default: 'npm'
+    default: 'auto'
   step-summary:
     description: 'Write a result section to the GitHub Actions job summary. Set to false to avoid collisions with a custom workflow summary.'
     required: false
@@ -30,6 +30,9 @@ outputs:
   source:
     description: 'Where the version spec was resolved from: "node-version input" or "package.json".'
     value: ${{ steps.resolve.outputs.source }}
+  package-manager:
+    description: 'The package manager used for the dependency cache, either set explicitly or detected with auto. Falls back to npm if nothing is detected.'
+    value: ${{ steps.resolve.outputs.package-manager }}
 
 runs:
   using: composite
@@ -65,30 +68,111 @@ runs:
           source="package.json"
         fi
 
+        # Prints the first existing lock file of the given package manager, or nothing.
+        find_lock_file() {
+          local candidate
+          case "$1" in
+            npm)  set -- package-lock.json npm-shrinkwrap.json ;;
+            yarn) set -- yarn.lock ;;
+            pnpm) set -- pnpm-lock.yaml ;;
+          esac
+          for candidate in "$@"; do
+            if [[ -f "${path}${candidate}" ]]; then
+              echo "${path}${candidate}"
+              return
+            fi
+          done
+        }
+
         case "$PACKAGE_MANAGER" in
-          npm)  lock_file="${path}package-lock.json" ;;
-          yarn) lock_file="${path}yarn.lock" ;;
-          pnpm) lock_file="${path}pnpm-lock.yaml" ;;
+          npm|yarn|pnpm)
+            package_manager="$PACKAGE_MANAGER"
+            lock_file=$(find_lock_file "$package_manager")
+            if [[ -z "$lock_file" ]]; then
+              echo "::error::No lock file for '$package_manager' found in '$path'. Commit the lock file or set 'package-manager' to 'auto' to skip the dependency cache."
+              exit 1
+            fi
+            ;;
+          auto)
+            package_manager=""
+            lock_file=""
+
+            # 1. The packageManager field in package.json, e.g. "yarn@4.18.1".
+            if [[ -f "$package_json" ]]; then
+              declared=$(jq -r '.packageManager // empty' "$package_json")
+              declared="${declared%%@*}"
+              case "$declared" in
+                npm|yarn|pnpm) package_manager="$declared" ;;
+                "") ;;
+                *) echo "::notice::Package manager '$declared' from '$package_json' is not supported for caching. Falling back to lock file detection." ;;
+              esac
+            fi
+
+            # 2. The lock file, in the order npm, yarn, pnpm.
+            if [[ -n "$package_manager" ]]; then
+              lock_file=$(find_lock_file "$package_manager")
+            else
+              for candidate in npm yarn pnpm; do
+                lock_file=$(find_lock_file "$candidate")
+                if [[ -n "$lock_file" ]]; then
+                  package_manager="$candidate"
+                  break
+                fi
+              done
+            fi
+
+            # 3. Nothing found: set up Node.js without a dependency cache.
+            if [[ -z "$lock_file" ]]; then
+              echo "::notice::No lock file found in '$path'. Node.js is set up without a dependency cache."
+            fi
+            package_manager="${package_manager:-npm}"
+            ;;
           *)
-            echo "::error::Unsupported package manager '$PACKAGE_MANAGER'. Supported values: npm, yarn, pnpm."
+            echo "::error::Unsupported package manager '$PACKAGE_MANAGER'. Supported values: auto, npm, yarn, pnpm."
             exit 1
             ;;
         esac
 
+        if [[ -n "$lock_file" ]]; then
+          cache="$package_manager"
+        else
+          cache=""
+        fi
+
         echo "Resolved Node.js version spec: $node_version (source: $source)"
+        echo "Package manager: $package_manager (lock file: ${lock_file:-none})"
         {
           echo "node-version=$node_version"
+          echo "package-manager=$package_manager"
+          echo "cache=$cache"
           echo "lock-file=$lock_file"
           echo "source=$source"
         } >> "$GITHUB_OUTPUT"
+    # setup-node calls yarn or pnpm to locate the cache directory, and pnpm is not preinstalled
+    # on the runners. This runs with the runner's own Node.js, so it does not depend on whether
+    # the selected version still ships Corepack (Node.js 25+ does not).
+    - name: Enable Corepack for ${{ steps.resolve.outputs.package-manager }}
+      if: ${{ steps.resolve.outputs.package-manager == 'yarn' || steps.resolve.outputs.package-manager == 'pnpm' }}
+      shell: bash
+      env:
+        PACKAGE_MANAGER: ${{ steps.resolve.outputs.package-manager }}
+      run: |
+        set -euo pipefail
+
+        if command -v corepack > /dev/null; then
+          corepack enable "$PACKAGE_MANAGER"
+        else
+          echo "::warning::Corepack is not available on this runner. Make sure '$PACKAGE_MANAGER' is installed before this action runs."
+        fi
     - name: Use Node.js ${{ steps.resolve.outputs.node-version }}
       id: setup
       uses: actions/setup-node@v7.1.0
       with:
         node-version: ${{ steps.resolve.outputs.node-version }}
         check-latest: true
-        cache: ${{ inputs.package-manager }}
+        cache: ${{ steps.resolve.outputs.cache }}
         cache-dependency-path: ${{ steps.resolve.outputs.lock-file }}
+        package-manager-cache: false # caching is controlled by the cache input above
     - name: Write job summary
       if: ${{ inputs.step-summary == 'true' }}
       shell: bash
@@ -96,8 +180,16 @@ runs:
         VERSION_SPEC: ${{ steps.resolve.outputs.node-version }}
         VERSION_SOURCE: ${{ steps.resolve.outputs.source }}
         INSTALLED_VERSION: ${{ steps.setup.outputs.node-version }}
+        PACKAGE_MANAGER: ${{ steps.resolve.outputs.package-manager }}
+        LOCK_FILE: ${{ steps.resolve.outputs.lock-file }}
       run: |
         set -euo pipefail
+
+        if [[ -n "$LOCK_FILE" ]]; then
+          cache_info="\`$LOCK_FILE\`"
+        else
+          cache_info="none (no lock file found)"
+        fi
 
         echo "Installed Node.js version: $INSTALLED_VERSION (spec: $VERSION_SPEC, source: $VERSION_SOURCE)"
         {
@@ -107,5 +199,7 @@ runs:
           echo "- **Installed:** \`$INSTALLED_VERSION\`"
           echo "- **Spec:** \`$VERSION_SPEC\`"
           echo "- **Source:** \`$VERSION_SOURCE\`"
+          echo "- **Package manager:** \`$PACKAGE_MANAGER\`"
+          echo "- **Dependency cache:** $cache_info"
           echo ""
         } >> "$GITHUB_STEP_SUMMARY"

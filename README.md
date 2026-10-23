@@ -44,7 +44,7 @@ jobs:
           persist-credentials: false # the GITHUB_TOKEN is not needed after the checkout - don't leave it in .git/config
 
       - name: Select Node Version
-        uses: svierk/get-node-version@v1.5.1
+        uses: svierk/get-node-version@v1.6.0
 ```
 
 Every `uses:` reference above is pinned to an exact release tag rather than a floating major tag, so adopting a new version is always an explicit, reviewable change of that pin.
@@ -55,10 +55,8 @@ Every `uses:` reference above is pinned to an exact release tag rather than a fl
 | ----------------- | -------- | ------- | -------------------------------------------------------------------------- |
 | `node-version`    | no       | –       | Explicit Node.js version spec (e.g. `24.x`) that takes precedence over the _package.json_ lookup. An empty value falls back to `engines.node`. |
 | `path`            | no       | `./`    | Path where the _package.json_ file can be found.                           |
-| `package-manager` | no       | `npm`   | Package manager used for dependency caching. Supported: `npm`, `yarn`, `pnpm`. |
+| `package-manager` | no       | `auto`  | Package manager used for dependency caching. Supported: `auto`, `npm`, `yarn`, `pnpm`. See [Package manager and dependency cache](#package-manager-and-dependency-cache). |
 | `step-summary`    | no       | `true`  | Write a result section to the GitHub Actions [job summary](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary). Set to `false` to avoid collisions with a custom workflow summary. |
-
-When using `pnpm`, make sure `pnpm` is available before this action runs (e.g. via [`pnpm/action-setup`](https://github.com/pnpm/action-setup)), as it is required for the dependency cache.
 
 ### Outputs
 
@@ -66,8 +64,30 @@ When using `pnpm`, make sure `pnpm` is available before this action runs (e.g. v
 | -------------- | ------------------------------------------------------------------------------------ |
 | `node-version` | The Node.js version spec resolved from the `node-version` input or the `engines.node` field. |
 | `source`       | Where the version spec was resolved from: `node-version input` or `package.json`.    |
+| `package-manager` | The package manager used for the dependency cache, either set explicitly or detected with `auto`. Falls back to `npm` if nothing is detected. |
 
 The action fails with a clear error if no `node-version` input is provided and the _package.json_ or its `engines.node` field is missing, so a misconfiguration surfaces immediately instead of silently falling back to an undefined version.
+
+### Package manager and dependency cache
+
+By default (`package-manager: auto`), the action detects the package manager of the project and enables the matching [dependency cache](https://github.com/actions/setup-node#caching-global-packages-data) of `actions/setup-node`:
+
+1. The [`packageManager`](https://nodejs.org/api/packages.html#packagemanager) field in the _package.json_, e.g. `"packageManager": "yarn@4.18.1"`.
+2. Otherwise the lock file: _package-lock.json_ or _npm-shrinkwrap.json_ → `npm`, _yarn.lock_ → `yarn`, _pnpm-lock.yaml_ → `pnpm`.
+3. If no lock file is found, Node.js is set up without a dependency cache and the action only emits a notice. This keeps projects that do not commit a lock file working.
+
+For `yarn` and `pnpm`, the action runs `corepack enable` before setting up Node.js, so the version pinned in the `packageManager` field is used and `pnpm` does not have to be installed separately. A `pnpm` installed beforehand, e.g. via [`pnpm/action-setup`](https://github.com/pnpm/action-setup), keeps working as well. The resolved value is available as the `package-manager` output for subsequent steps:
+
+```yaml
+- name: Select Node Version
+  id: node
+  uses: svierk/get-node-version@v1.6.0
+
+- name: Install dependencies
+  run: ${{ steps.node.outputs.package-manager }} install
+```
+
+Setting `package-manager` explicitly to `npm`, `yarn` or `pnpm` skips the detection. In this case the matching lock file is required and the action fails if it is missing.
 
 ### Overriding the version via repository variable
 
@@ -75,14 +95,14 @@ The _package.json_ remains the recommended single source of truth, since it is t
 
 ```yaml
 - name: Select Node Version
-  uses: svierk/get-node-version@v1.5.1
+  uses: svierk/get-node-version@v1.6.0
   with:
     node-version: ${{ vars.NODE_VERSION_OVERRIDE }}
 ```
 
 This wiring is safe to keep in place permanently: as long as the variable is unset or blank, the expression evaluates to an empty string and the action falls back to the `engines.node` field as usual. Only when the variable is populated does it take precedence - so a temporary override becomes a pure configuration change, and removing the variable's value restores the default behaviour. The job summary and the `source` output always show which of the two sources was used.
 
-Note that when an explicit version is provided this way, a _package.json_ is no longer required for the version lookup itself - but the lock file matching the selected `package-manager` still needs to exist for dependency caching.
+Note that when an explicit version is provided this way, a _package.json_ is no longer required for the version lookup itself. With `package-manager: auto`, the package manager is then detected from the lock file alone.
 
 ## References
 
