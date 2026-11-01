@@ -5,7 +5,7 @@ This repository implements a very simple GitHub composite action that pulls the 
 ```json
 {
   "engines": {
-    "node": "24.x.x",
+    "node": "26.x.x",
   },
 }
 ```
@@ -53,7 +53,7 @@ Every `uses:` reference above is pinned to an exact release tag rather than a fl
 
 | Name              | Required | Default | Description                                                                |
 | ----------------- | -------- | ------- | -------------------------------------------------------------------------- |
-| `node-version`    | no       | –       | Explicit Node.js version spec (e.g. `24.x`) that takes precedence over the _package.json_ lookup. An empty value falls back to `engines.node`. |
+| `node-version`    | no       | –       | Explicit Node.js version spec (e.g. `26.x`) that takes precedence over the _package.json_ lookup. An empty value falls back to `engines.node`. |
 | `path`            | no       | `./`    | Path where the _package.json_ file can be found.                           |
 | `package-manager` | no       | `auto`  | Package manager used for dependency caching. Supported: `auto`, `npm`, `yarn`, `pnpm`. See [Package manager and dependency cache](#package-manager-and-dependency-cache). |
 | `step-summary`    | no       | `true`  | Write a result section to the GitHub Actions [job summary](https://docs.github.com/en/actions/using-workflows/workflow-commands-for-github-actions#adding-a-job-summary). Set to `false` to avoid collisions with a custom workflow summary. |
